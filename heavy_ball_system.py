@@ -3,8 +3,8 @@ from typing import Sequence
 import numpy as np
 
 
-K = 6.0
-EPS = 0.3
+K = 2.0
+EPS = 0.1
 
 
 def potential(x, y, eps: float = EPS, k: float = K):
