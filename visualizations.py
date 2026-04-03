@@ -2,16 +2,37 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from classify_equilibria import classify_equilibria
-from find_equilibria import cluster_points, refine_roots, scan_equilibrium_grid
-from heavy_ball_system import dfdx, dfdy, potential, rhs
+from find_equilibria import find_equilibria_pipeline
+from heavy_ball_system import (
+    CONTOUR_NUM_POINTS,
+    DEFAULT_AMPLITUDE,
+    DEFAULT_GAMMA,
+    DEFAULT_OMEGA,
+    DEFAULT_T,
+    DEFAULT_VX,
+    DEFAULT_VY,
+    SCAN_NUM_POINTS,
+    SCAN_TOL,
+    CLUSTER_DISTANCE,
+    SURFACE_NUM_POINTS,
+    XMAX,
+    XMIN,
+    YMAX,
+    YMIN,
+    dfdx,
+    dfdy,
+    potential,
+    rhs,
+    rhs_components_on_xy_grid,
+)
 
 
 def make_xy_grid(
-    xmin: float = -2.0,
-    xmax: float = 2.0,
-    ymin: float = -2.0,
-    ymax: float = 2.0,
-    num_points: int = 201,
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = SURFACE_NUM_POINTS,
 ):
     """Create a uniform 2D grid in the x-y plane."""
     x_values = np.linspace(xmin, xmax, num_points)
@@ -19,28 +40,17 @@ def make_xy_grid(
     return np.meshgrid(x_values, y_values, indexing="ij")
 
 
-def find_equilibrium_roots(
-    scan_tol: float = 0.05,
-    cluster_distance: float = 0.1,
-    num_points: int = 161,
-):
-    """Run the full scan-cluster-refine pipeline and return equilibrium roots."""
-    candidates = scan_equilibrium_grid(num_points=num_points, tol=scan_tol)
-    guesses = cluster_points(candidates, distance_threshold=cluster_distance)
-    roots = refine_roots(guesses)
-    return candidates, guesses, roots
-
-
 def plot_equilibrium_contours(
-    xmin: float = -2.0,
-    xmax: float = 2.0,
-    ymin: float = -2.0,
-    ymax: float = 2.0,
-    num_points: int = 401,
-    scan_tol: float = 0.05,
-    cluster_distance: float = 0.1,
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = CONTOUR_NUM_POINTS,
+    scan_num_points: int = SCAN_NUM_POINTS,
+    scan_tol: float = SCAN_TOL,
+    cluster_distance: float = CLUSTER_DISTANCE,
     show_candidates: bool = False,
-    gamma: float = 1.0,
+    gamma: float = DEFAULT_GAMMA,
 ):
     """
     Plot the zero contours of dfdx and dfdy and overlay classified equilibria.
@@ -49,16 +59,18 @@ def plot_equilibrium_contours(
     fx_grid = dfdx(x_grid, y_grid)
     fy_grid = dfdy(x_grid, y_grid)
 
-    candidates, guesses, roots = find_equilibrium_roots(
+    candidates, guesses, roots = find_equilibria_pipeline(
+        xmin=xmin,
+        xmax=xmax,
+        ymin=ymin,
+        ymax=ymax,
+        num_points=scan_num_points,
         scan_tol=scan_tol,
         cluster_distance=cluster_distance,
-        num_points=max(161, num_points // 2),
     )
     records, _ = classify_equilibria(
+        roots=roots,
         gamma=gamma,
-        scan_tol=scan_tol,
-        cluster_distance=cluster_distance,
-        num_points=max(161, num_points // 2),
     )
 
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -163,11 +175,11 @@ def plot_surface(x_grid, y_grid, z_grid, title: str, zlabel: str):
 
 
 def plot_potential_surface(
-    xmin: float = -2.0,
-    xmax: float = 2.0,
-    ymin: float = -2.0,
-    ymax: float = 2.0,
-    num_points: int = 201,
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = SURFACE_NUM_POINTS,
 ):
     """Plot the potential f(x, y)."""
     x_grid, y_grid = make_xy_grid(xmin, xmax, ymin, ymax, num_points=num_points)
@@ -176,11 +188,11 @@ def plot_potential_surface(
 
 
 def plot_gradient_surfaces(
-    xmin: float = -2.0,
-    xmax: float = 2.0,
-    ymin: float = -2.0,
-    ymax: float = 2.0,
-    num_points: int = 201,
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = SURFACE_NUM_POINTS,
 ):
     """Plot 3D surfaces for dfdx and dfdy."""
     x_grid, y_grid = make_xy_grid(xmin, xmax, ymin, ymax, num_points=num_points)
@@ -208,48 +220,47 @@ def plot_gradient_surfaces(
 
 
 def compute_rhs_surfaces(
-    t: float = 0.0,
-    gamma: float = 0.2,
-    amplitude: float = 0.0,
-    omega: float = 1.0,
-    vx: float = 0.0,
-    vy: float = 0.0,
-    xmin: float = -2.0,
-    xmax: float = 2.0,
-    ymin: float = -2.0,
-    ymax: float = 2.0,
-    num_points: int = 201,
+    t: float = DEFAULT_T,
+    gamma: float = DEFAULT_GAMMA,
+    amplitude: float = DEFAULT_AMPLITUDE,
+    omega: float = DEFAULT_OMEGA,
+    vx: float = DEFAULT_VX,
+    vy: float = DEFAULT_VY,
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = SURFACE_NUM_POINTS,
 ):
     """
     Evaluate the heavy-ball RHS on the x-y plane for fixed t, vx, and vy.
     """
     x_grid, y_grid = make_xy_grid(xmin, xmax, ymin, ymax, num_points=num_points)
-
-    x_dot = np.full_like(x_grid, vx, dtype=float)
-    y_dot = np.full_like(y_grid, vy, dtype=float)
-    vx_dot = -gamma * vx - dfdx(x_grid, y_grid) - amplitude * np.sin(omega * t)
-    vy_dot = -gamma * vy - dfdy(x_grid, y_grid) - amplitude * np.sin(omega * t)
-
-    return x_grid, y_grid, {
-        "x_dot": x_dot,
-        "y_dot": y_dot,
-        "vx_dot": vx_dot,
-        "vy_dot": vy_dot,
-    }
+    surfaces = rhs_components_on_xy_grid(
+        x_grid,
+        y_grid,
+        t=t,
+        gamma=gamma,
+        amplitude=amplitude,
+        omega=omega,
+        vx=vx,
+        vy=vy,
+    )
+    return x_grid, y_grid, surfaces
 
 
 def plot_rhs_surfaces(
-    t: float = 0.0,
-    gamma: float = 0.2,
-    amplitude: float = 0.0,
-    omega: float = 1.0,
-    vx: float = 0.0,
-    vy: float = 0.0,
-    xmin: float = -2.0,
-    xmax: float = 2.0,
-    ymin: float = -2.0,
-    ymax: float = 2.0,
-    num_points: int = 201,
+    t: float = DEFAULT_T,
+    gamma: float = DEFAULT_GAMMA,
+    amplitude: float = DEFAULT_AMPLITUDE,
+    omega: float = DEFAULT_OMEGA,
+    vx: float = DEFAULT_VX,
+    vy: float = DEFAULT_VY,
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = SURFACE_NUM_POINTS,
 ):
     """Plot 3D surfaces for the four components of the heavy-ball RHS."""
     x_grid, y_grid, surfaces = compute_rhs_surfaces(
@@ -295,12 +306,12 @@ def plot_rhs_surfaces(
 def evaluate_rhs_at_point(
     x: float,
     y: float,
-    vx: float = 0.0,
-    vy: float = 0.0,
-    t: float = 0.0,
-    gamma: float = 0.2,
-    amplitude: float = 0.0,
-    omega: float = 1.0,
+    vx: float = DEFAULT_VX,
+    vy: float = DEFAULT_VY,
+    t: float = DEFAULT_T,
+    gamma: float = DEFAULT_GAMMA,
+    amplitude: float = DEFAULT_AMPLITUDE,
+    omega: float = DEFAULT_OMEGA,
 ):
     """Convenience wrapper around rhs for a single state."""
     return rhs(

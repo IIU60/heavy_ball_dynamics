@@ -1,22 +1,34 @@
 import numpy as np
 from scipy.optimize import fsolve
 
-from heavy_ball_system import dfdx, dfdy
+from heavy_ball_system import (
+    CLUSTER_DISTANCE,
+    DUPLICATE_TOL,
+    ROOT_TOL,
+    SCAN_NUM_POINTS,
+    SCAN_TOL,
+    XMAX,
+    XMIN,
+    YMAX,
+    YMIN,
+    dfdx,
+    dfdy,
+    gradient,
+)
 
 
 def scan_equilibrium_grid(
-    xmin: float = -2.0,
-    xmax: float = 2.0,
-    ymin: float = -2.0,
-    ymax: float = 2.0,
-    num_points: int = 161,
-    tol: float = 0.05,
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = SCAN_NUM_POINTS,
+    tol: float = SCAN_TOL,
 ):
     """
     Scan a uniform grid and return points where both derivatives are small.
 
-    Each result is returned as a row of
-    [x, y, dfdx_value, dfdy_value].
+    Each result is returned as a row of [x, y, dfdx_value, dfdy_value].
     """
     if num_points < 2:
         raise ValueError("num_points must be at least 2")
@@ -27,22 +39,12 @@ def scan_equilibrium_grid(
 
     fx_grid = dfdx(x_grid, y_grid)
     fy_grid = dfdy(x_grid, y_grid)
-
     mask = (np.abs(fx_grid) < tol) & (np.abs(fy_grid) < tol)
 
-    print(np.sum(mask))
-
-    return np.column_stack(
-        (
-            x_grid[mask],
-            y_grid[mask],
-            fx_grid[mask],
-            fy_grid[mask],
-        )
-    )
+    return np.column_stack((x_grid[mask], y_grid[mask], fx_grid[mask], fy_grid[mask]))
 
 
-def cluster_points(points, distance_threshold: float = 0.1):
+def cluster_points(points, distance_threshold: float = CLUSTER_DISTANCE):
     """
     Cluster nearby 2D points using a simple distance threshold.
 
@@ -66,8 +68,8 @@ def cluster_points(points, distance_threshold: float = 0.1):
 
         cluster_indices = [i]
         assigned[i] = True
-
         changed = True
+
         while changed:
             changed = False
             cluster_members = xy[cluster_indices]
@@ -90,10 +92,14 @@ def cluster_points(points, distance_threshold: float = 0.1):
 def equilibrium_residual(point):
     """Return F(x, y) = (dfdx, dfdy)."""
     x, y = point
-    return np.array([dfdx(x, y), dfdy(x, y)], dtype=float)
+    return gradient(x, y)
 
 
-def refine_roots(initial_guesses, root_tol: float = 1e-10, duplicate_tol: float = 1e-6):
+def refine_roots(
+    initial_guesses,
+    root_tol: float = ROOT_TOL,
+    duplicate_tol: float = DUPLICATE_TOL,
+):
     """
     Refine clustered initial guesses into true roots using scipy.optimize.fsolve.
 
@@ -107,7 +113,7 @@ def refine_roots(initial_guesses, root_tol: float = 1e-10, duplicate_tol: float 
     roots = []
 
     for guess in initial_guesses:
-        root, info, ier, _ = fsolve(
+        root, _, ier, _ = fsolve(
             equilibrium_residual,
             x0=guess,
             full_output=True,
@@ -134,13 +140,40 @@ def refine_roots(initial_guesses, root_tol: float = 1e-10, duplicate_tol: float 
     return np.array(unique_roots)
 
 
+def find_equilibria_pipeline(
+    xmin: float = XMIN,
+    xmax: float = XMAX,
+    ymin: float = YMIN,
+    ymax: float = YMAX,
+    num_points: int = SCAN_NUM_POINTS,
+    scan_tol: float = SCAN_TOL,
+    cluster_distance: float = CLUSTER_DISTANCE,
+    root_tol: float = ROOT_TOL,
+    duplicate_tol: float = DUPLICATE_TOL,
+):
+    """Run the canonical scan-cluster-refine equilibrium pipeline."""
+    candidates = scan_equilibrium_grid(
+        xmin=xmin,
+        xmax=xmax,
+        ymin=ymin,
+        ymax=ymax,
+        num_points=num_points,
+        tol=scan_tol,
+    )
+    guesses = cluster_points(candidates, distance_threshold=cluster_distance)
+    roots = refine_roots(
+        guesses,
+        root_tol=root_tol,
+        duplicate_tol=duplicate_tol,
+    )
+    return candidates, guesses, roots
+
+
 if __name__ == "__main__":
-    candidates = scan_equilibrium_grid()
-    clustered_guesses = cluster_points(candidates, distance_threshold=0.1)
-    roots = refine_roots(clustered_guesses)
+    candidates, guesses, roots = find_equilibria_pipeline()
 
     print(f"Found {len(candidates)} candidate grid points.")
-    print(f"Reduced to {len(clustered_guesses)} clustered initial guesses.")
+    print(f"Reduced to {len(guesses)} clustered initial guesses.")
     print(f"Refined to {len(roots)} distinct roots.")
 
     for x, y, fx, fy in roots:

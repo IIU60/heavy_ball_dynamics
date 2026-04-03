@@ -1,41 +1,20 @@
 import numpy as np
 
-from find_equilibria import cluster_points, refine_roots, scan_equilibrium_grid
-from heavy_ball_system import potential
+from find_equilibria import find_equilibria_pipeline
+from heavy_ball_system import (
+    CLASSIFICATION_TOL,
+    CLUSTER_DISTANCE,
+    DEFAULT_GAMMA,
+    GLOBAL_MIN_TOL,
+    SCAN_NUM_POINTS,
+    SCAN_TOL,
+    hessian,
+    jacobian,
+    potential,
+)
 
 
-def hessian(x, y):
-    """
-    Hessian of
-    f(x, y) = 1/4 (x^2 + y^2 - 1)^2 + 0.1 (cos(2x) + cos(2y)).
-    """
-    f_xx = (3.0 * x**2 + y**2 - 1.0) - 0.4 * np.cos(2.0 * x)
-    f_yy = (x**2 + 3.0 * y**2 - 1.0) - 0.4 * np.cos(2.0 * y)
-    f_xy = 2.0 * x * y
-
-    return np.array([[f_xx, f_xy], [f_xy, f_yy]], dtype=float)
-
-
-def jacobian(x, y, gamma: float = 1.0):
-    """
-    Jacobian of the heavy-ball system at an equilibrium with vx = vy = 0.
-
-    This follows the supplied structure, with the damping coefficient denoted
-    by gamma in the original system.
-    """
-    hess = hessian(x, y)
-    return np.array(
-        [
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-            [-hess[0, 0], -hess[0, 1], -gamma, 0.0],
-            [-hess[1, 0], -hess[1, 1], 0.0, -gamma],
-        ],
-        dtype=float,
-    )
-
-
-def classify_hessian(hess, tol: float = 1e-8):
+def classify_hessian(hess, tol: float = CLASSIFICATION_TOL):
     """Classify an equilibrium as a minimum, maximum, saddle, or degenerate."""
     eigenvalues = np.linalg.eigvalsh(hess)
 
@@ -51,7 +30,7 @@ def classify_hessian(hess, tol: float = 1e-8):
     return label, eigenvalues
 
 
-def classify_jacobian(jac, tol: float = 1e-8):
+def classify_jacobian(jac, tol: float = CLASSIFICATION_TOL):
     """Classify linear stability from Jacobian eigenvalues."""
     eigenvalues = np.linalg.eigvals(jac)
     real_parts = np.real(eigenvalues)
@@ -66,31 +45,21 @@ def classify_jacobian(jac, tol: float = 1e-8):
     return label, eigenvalues
 
 
-def find_all_equilibria(
-    scan_tol: float = 0.05,
-    cluster_distance: float = 0.1,
-    num_points: int = 161,
-):
-    """Run the scan-cluster-refine pipeline."""
-    candidates = scan_equilibrium_grid(num_points=num_points, tol=scan_tol)
-    guesses = cluster_points(candidates, distance_threshold=cluster_distance)
-    roots = refine_roots(guesses)
-    return candidates, guesses, roots
-
-
 def classify_equilibria(
-    gamma: float = 1.0,
-    scan_tol: float = 0.05,
-    cluster_distance: float = 0.1,
-    num_points: int = 161,
-    value_tol: float = 1e-8,
+    roots=None,
+    gamma: float = DEFAULT_GAMMA,
+    scan_tol: float = SCAN_TOL,
+    cluster_distance: float = CLUSTER_DISTANCE,
+    num_points: int = SCAN_NUM_POINTS,
+    value_tol: float = GLOBAL_MIN_TOL,
 ):
     """Compute equilibrium classifications and identify global minima."""
-    _, _, roots = find_all_equilibria(
-        scan_tol=scan_tol,
-        cluster_distance=cluster_distance,
-        num_points=num_points,
-    )
+    if roots is None:
+        _, _, roots = find_equilibria_pipeline(
+            num_points=num_points,
+            scan_tol=scan_tol,
+            cluster_distance=cluster_distance,
+        )
 
     records = []
     for root in roots:
@@ -230,7 +199,7 @@ def print_latex_minima_table(records, global_min_value):
 
 
 if __name__ == "__main__":
-    records, global_min_value = classify_equilibria(gamma=1.0)
+    records, global_min_value = classify_equilibria()
 
     print("\nEquilibrium classification summary:\n")
     print_plain_table(records)
