@@ -49,7 +49,6 @@ def plot_equilibrium_contours(
     scan_num_points: int = SCAN_NUM_POINTS,
     scan_tol: float = SCAN_TOL,
     cluster_distance: float = CLUSTER_DISTANCE,
-    show_candidates: bool = False,
     gamma: float = DEFAULT_GAMMA,
 ):
     """
@@ -59,7 +58,7 @@ def plot_equilibrium_contours(
     fx_grid = dfdx(x_grid, y_grid)
     fy_grid = dfdy(x_grid, y_grid)
 
-    candidates, guesses, roots = find_equilibria_pipeline(
+    _, _, roots = find_equilibria_pipeline(
         xmin=xmin,
         xmax=xmax,
         ymin=ymin,
@@ -76,80 +75,80 @@ def plot_equilibrium_contours(
     fig, ax = plt.subplots(figsize=(8, 8))
     ax.contour(x_grid, y_grid, fx_grid, levels=[0.0], colors="tab:blue", linewidths=2)
     ax.contour(x_grid, y_grid, fy_grid, levels=[0.0], colors="tab:orange", linewidths=2)
-
-    if show_candidates and len(candidates) > 0:
-        ax.scatter(
-            candidates[:, 0],
-            candidates[:, 1],
-            s=10,
-            c="0.75",
-            alpha=0.6,
-            label="grid candidates",
-        )
-
-    if len(guesses) > 0:
-        ax.scatter(
-            guesses[:, 0],
-            guesses[:, 1],
-            s=50,
-            c="tab:green",
-            marker="x",
-            label="clustered guesses",
-        )
+    # Legend proxies: QuadContourSet has no .collections in recent Matplotlib.
+    ax.plot(
+        [],
+        [],
+        color="tab:blue",
+        linewidth=2,
+        label=r"$\partial_x f = 0$",
+    )
+    ax.plot(
+        [],
+        [],
+        color="tab:orange",
+        linewidth=2,
+        label=r"$\partial_y f = 0$",
+    )
 
     if len(roots) > 0:
-        style_map = {
-            ("minimum", "stable"): ("tab:green", "o"),
-            ("minimum", "unstable"): ("yellowgreen", "o"),
-            ("minimum", "marginal"): ("olive", "o"),
-            ("maximum", "stable"): ("tab:purple", "^"),
-            ("maximum", "unstable"): ("mediumpurple", "^"),
-            ("maximum", "marginal"): ("indigo", "^"),
-            ("saddle", "stable"): ("tab:red", "s"),
-            ("saddle", "unstable"): ("tomato", "s"),
-            ("saddle", "marginal"): ("firebrick", "s"),
-            ("degenerate", "stable"): ("tab:gray", "D"),
-            ("degenerate", "unstable"): ("dimgray", "D"),
-            ("degenerate", "marginal"): ("black", "D"),
+        non_minimum_style = {
+            "maximum": ("tab:purple", "^", "Maximum"),
+            "saddle": ("tab:red", "s", "Saddle"),
+            "degenerate": ("tab:gray", "D", "Degenerate"),
         }
 
-        plotted_labels = set()
+        legend_labels_used = set()
+
+        def legend_label_once(text: str):
+            if text in legend_labels_used:
+                return None
+            legend_labels_used.add(text)
+            return text
+
         for record in records:
-            color, marker = style_map.get(
-                (record["hessian_type"], record["stability"]),
-                ("black", "o"),
-            )
-            label = f"{record['hessian_type']}, {record['stability']}"
-            ax.scatter(
-                record["x"],
-                record["y"],
-                s=90,
-                c=color,
-                marker=marker,
-                edgecolors="black",
-                linewidths=0.6,
-                label=label if label not in plotted_labels else None,
-                zorder=5,
-            )
-            plotted_labels.add(label)
-            text_label = record["hessian_type"]
-            if record["hessian_type"] == "minimum":
-                text_label = f"{text_label} ({record['minimum_scope']})"
-            ax.annotate(
-                text_label,
-                (record["x"], record["y"]),
-                xytext=(6, 6),
-                textcoords="offset points",
-                fontsize=8,
-                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "alpha": 0.75, "ec": "none"},
-            )
+            htype = record["hessian_type"]
+            if htype == "minimum":
+                scope = record["minimum_scope"]
+                color = "tab:green" if scope == "global" else "yellowgreen"
+                leg = "Global minimum" if scope == "global" else "Local minimum"
+                ax.scatter(
+                    record["x"],
+                    record["y"],
+                    s=90,
+                    c=color,
+                    marker="o",
+                    edgecolors="black",
+                    linewidths=0.6,
+                    label=legend_label_once(leg),
+                    zorder=5,
+                )
+            else:
+                style = non_minimum_style.get(htype)
+                if style is None:
+                    color, marker, leg = "black", "o", "Other equilibrium"
+                else:
+                    color, marker, leg = style
+                ax.scatter(
+                    record["x"],
+                    record["y"],
+                    s=90,
+                    c=color,
+                    marker=marker,
+                    edgecolors="black",
+                    linewidths=0.6,
+                    label=legend_label_once(leg),
+                    zorder=5,
+                )
 
     ax.set_xlabel("x")
     ax.set_ylabel("y")
-    ax.set_title(r"Zero contours of $\partial_x f$, $\partial_y f$, and classified equilibria")
+    # ax.set_title(r"Zero contours of $\partial_x f$, $\partial_y f$, and classified equilibria")
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.25)
-    ax.legend()
+    ax.legend(
+        fontsize=15,
+    )
     return fig, ax
 
 
@@ -324,9 +323,9 @@ def evaluate_rhs_at_point(
 
 
 if __name__ == "__main__":
-    plot_equilibrium_contours(show_candidates=True)
-    plot_potential_surface()
-    plot_gradient_surfaces()
-    plot_rhs_surfaces()
+    plot_equilibrium_contours()
+    # plot_potential_surface()
+    # plot_gradient_surfaces()
+    # plot_rhs_surfaces()
     if "agg" not in plt.get_backend().lower():
         plt.show()

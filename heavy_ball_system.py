@@ -3,8 +3,8 @@ from typing import Sequence
 import numpy as np
 
 
-K = 6.0
-EPS = 0.3
+K = 2.0
+EPS = 0.1
 DEFAULT_GAMMA = 1.0
 
 XMIN = -2.0
@@ -77,7 +77,6 @@ def jacobian(
         ],
         dtype=float,
     )
-
 
 def forcing(
     t: float = DEFAULT_T,
