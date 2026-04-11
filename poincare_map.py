@@ -11,7 +11,7 @@ def get_poincare_data(amplitude, gamma, omega, n_cycles=600):
     t_span = (0, n_cycles * T)
     t_eval = np.arange(0, n_cycles * T, T) # Strobe matches the specific omega
     
-    initial_state = [0.102, 0.1, 0.0, 0.0]
+    initial_state = [0.0, 0.1, 0.0, 0.1]
     
     sol = solve_ivp(
         lambda t, y: rhs(t, y, gamma=gamma, amplitude=amplitude, omega=omega),
@@ -58,10 +58,11 @@ plot_dynamics(amplitude=1.0, gamma=10, omega=0.5)
 # Adjusting the parameters will show you different regimes of behavior, from periodic to chaotic.
 
 #amplitude sweep:
-plot_dynamics(amplitude=5, gamma=0.5, omega=1.0)
+
 
 #gamma sweep:
-plot_dynamics(amplitude=1.0, gamma=0.1, omega=1.0)
+
 
 #omega sweep:
-plot_dynamics(amplitude=1.0, gamma=0.5, omega=2.4)
+
+plot_dynamics(amplitude=0.1, gamma=3, omega=1)
