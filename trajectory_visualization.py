@@ -2,11 +2,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-from heavy_ball_system import potential, rhs
+from heavy_ball_system import DEFAULT_OMEGA, potential, rhs
+from visualizations import plot_equilibrium_contours
 
 WARMUP_FRACTION = 0.3
 METHOD = "RK45"
 RTOL = 1e-8
+
+DEFAULT_INITIAL_STATE = np.array([1.0, 0.0, 1.0, 0.0], dtype=float)
+DEFAULT_PERTURBATIONS = (
+    np.array([1e-3, 0.0, 0.0, 0.0]),
+    np.array([0.0, 1e-3, 0.0, 0.0]),
+)
+TRAJECTORY_ZORDER = 6
 
 
 def integrate_dense(
@@ -59,102 +67,90 @@ def strobed_energy(
     return energy[warm_up:]
 
 
-def plot_all_scenarios(scenarios):
-    n = len(scenarios)
-    fig, axes = plt.subplots(n, 2, figsize=(12, 4 * n))
-    if n == 1:
-        axes = np.array([axes])
+def plot_trajectory_dynamics(
+    amplitude: float,
+    gamma: float,
+    *,
+    omega: float = DEFAULT_OMEGA,
+    initial_state=None,
+    perturbations=None,
+    n_cycles: int = 600,
+    n_dense_points: int = 4000,
+    overlay_equilibria: bool = False,
+):
+    """
+    For one (amplitude, gamma) pair: plot three slightly perturbed (x, y) trajectories
+    and strobed energy for the reference trajectory. All other settings default to
+    shared values (same omega, ICs, integration length, …).
+
+    If overlay_equilibria is True, draw the trajectory panel on top of the
+    equilibrium contour / classification plot from visualizations.plot_equilibrium_contours.
+    """
+    if initial_state is None:
+        initial_state = DEFAULT_INITIAL_STATE
+    if perturbations is None:
+        perturbations = DEFAULT_PERTURBATIONS
+
+    base = np.asarray(initial_state, dtype=float)
+    d1, d2 = perturbations
+    states = [base, base + np.asarray(d1), base + np.asarray(d2)]
+
+    T = 2 * np.pi / omega
+    t_end = n_cycles * T
 
     colors = ("tab:blue", "tab:orange", "tab:green")
     labels = ("reference", "perturbation 1", "perturbation 2")
 
-    for row, scenario in enumerate(scenarios):
-        ax_xy, ax_e = axes[row]
-        base = np.asarray(scenario["initial_state"], dtype=float)
-        d1, d2 = scenario["perturbations"]
-        states = [base, base + np.asarray(d1), base + np.asarray(d2)]
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6) if overlay_equilibria else (12, 5))
+    ax_xy, ax_e = axes[0], axes[1]
 
-        amplitude = scenario["amplitude"]
-        gamma = scenario["gamma"]
-        omega = scenario["omega"]
-        t_end = scenario["t_end"]
-        n_dense = scenario.get("n_dense_points", 4000)
-        n_cycles = scenario["n_cycles"]
+    if overlay_equilibria:
+        plot_equilibrium_contours(gamma=gamma, ax=ax_xy)
 
-        for state0, color, label in zip(states, colors, labels):
-            out = integrate_dense(
-                state0, amplitude, gamma, omega, t_end, n_points=n_dense
-            )
-            ax_xy.plot(out.y[0], out.y[1], color=color, linewidth=0.9, label=label)
-
-        energy_trimmed = strobed_energy(
-            base, amplitude, gamma, omega, n_cycles=n_cycles
+    for state0, color, label in zip(states, colors, labels):
+        out = integrate_dense(
+            state0, amplitude, gamma, omega, t_end, n_points=n_dense_points
         )
-        ax_e.plot(energy_trimmed, color="red", linewidth=0.8)
-        ax_e.set_title("Energy at sampled periods")
-        ax_e.set_xlabel("Cycle (n)")
-        ax_e.set_ylabel("Energy V")
-
-        ax_xy.set_aspect("equal", adjustable="box")
-        ax_xy.set_xlabel("$x$")
-        ax_xy.set_ylabel("$y$")
-        ax_xy.set_title(
-            f"{scenario['label']}: "
-            rf"$A={amplitude},\ \gamma={gamma},\ \Omega={omega}$"
+        ax_xy.plot(
+            out.y[0],
+            out.y[1],
+            color=color,
+            linewidth=1.0,
+            label=label,
+            zorder=TRAJECTORY_ZORDER,
         )
-        ax_xy.legend(loc="best", fontsize=8)
 
-    fig.suptitle("Trajectory comparison: three perturbed paths per regime", fontsize=14)
+    energy_trimmed = strobed_energy(
+        base, amplitude, gamma, omega, n_cycles=n_cycles
+    )
+    ax_e.plot(energy_trimmed, color="red", linewidth=0.8)
+    ax_e.set_title("Energy at sampled periods")
+    ax_e.set_xlabel("Cycle (n)")
+    ax_e.set_ylabel("Energy V")
+
+    ax_xy.set_aspect("equal", adjustable="box")
+    ax_xy.set_xlabel("$x$")
+    ax_xy.set_ylabel("$y$")
+    if overlay_equilibria:
+        ax_xy.set_title(r"Trajectories on $\partial_x f=0$, $\partial_y f=0$, equilibria")
+    else:
+        ax_xy.set_title(r"$(x,y)$ trajectories")
+
+    fig.suptitle(
+        rf"Trajectories and energy: $A={amplitude},\ \gamma={gamma},\ \Omega={omega}$",
+        fontsize=14,
+    )
+    ax_xy.legend(loc="best", fontsize=8)
     plt.tight_layout()
     plt.show()
 
 
-# Base perturbations (small offsets in x and y)
-_DELTA_XY = (
-    np.array([1e-3, 0.0, 0.0, 0.0]),
-    np.array([0.0, 1e-3, 0.0, 0.0]),
-)
-
-T_PERIODIC = 2 * np.pi / 0.5
-T_CHAOTIC = 2 * np.pi / 1.0
-T_STABLE = 2 * np.pi / 1.0
-
-SCENARIOS = [
-    {
-        "label": "Periodic",
-        "amplitude": 1.0,
-        "gamma": 10.0,
-        "omega": 0.5,
-        "initial_state": [0.0, 0.1, 0.0, 0.1],
-        "perturbations": _DELTA_XY,
-        "n_cycles": 600,
-        "t_end": 600 * T_PERIODIC,
-        "n_dense_points": 4000,
-    },
-    {
-        "label": "Chaotic",
-        "amplitude": 0.1,
-        "gamma": 3.0,
-        "omega": 1.0,
-        "initial_state": [0.0, 0.1, 0.0, 0.1],
-        "perturbations": _DELTA_XY,
-        "n_cycles": 600,
-        "t_end": 600 * T_CHAOTIC,
-        "n_dense_points": 4000,
-    },
-    {
-        "label": "Stable (damped)",
-        "amplitude": 0.0,
-        "gamma": 8.0,
-        "omega": 1.0,
-        "initial_state": [0.95, 0.0, 0.0, 0.0],
-        "perturbations": _DELTA_XY,
-        "n_cycles": 200,
-        "t_end": 200 * T_STABLE,
-        "n_dense_points": 2500,
-    },
-]
-
-
 if __name__ == "__main__":
-    plot_all_scenarios(SCENARIOS)
+    # Same shared defaults (omega, ICs, n_cycles, …); only amplitude and gamma change.
+    # plot_trajectory_dynamics(amplitude=1.0, gamma=10.0)
+    plot_trajectory_dynamics(amplitude=0.5, gamma=0.1, omega=1, overlay_equilibria=True)
+    plot_trajectory_dynamics(amplitude=1, gamma=3.0, omega=1)
+    # plot_trajectory_dynamics(amplitude=0.0, gamma=8.0)
+
+    # Example with trajectories overlaid on equilibrium contours (uncomment to run):
+    # plot_trajectory_dynamics(1.0, 10.0, overlay_equilibria=True)

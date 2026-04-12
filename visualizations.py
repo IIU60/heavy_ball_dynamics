@@ -50,10 +50,19 @@ def plot_equilibrium_contours(
     scan_tol: float = SCAN_TOL,
     cluster_distance: float = CLUSTER_DISTANCE,
     gamma: float = DEFAULT_GAMMA,
+    ax=None,
 ):
     """
     Plot the zero contours of dfdx and dfdy and overlay classified equilibria.
+
+    If ax is None, a new figure is created. If ax is given, draws on that axis
+    (e.g. to overlay trajectories from trajectory_visualization).
     """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 8))
+    else:
+        fig = ax.figure
+
     x_grid, y_grid = make_xy_grid(xmin, xmax, ymin, ymax, num_points=num_points)
     fx_grid = dfdx(x_grid, y_grid)
     fy_grid = dfdy(x_grid, y_grid)
@@ -72,7 +81,6 @@ def plot_equilibrium_contours(
         gamma=gamma,
     )
 
-    fig, ax = plt.subplots(figsize=(8, 8))
     ax.contour(x_grid, y_grid, fx_grid, levels=[0.0], colors="tab:blue", linewidths=2)
     ax.contour(x_grid, y_grid, fy_grid, levels=[0.0], colors="tab:orange", linewidths=2)
     # Legend proxies: QuadContourSet has no .collections in recent Matplotlib.
