@@ -97,15 +97,29 @@ def classify_equilibria(
     return records, global_min_value
 
 
-def format_complex(z, digits: int = 6):
-    """Format a complex number for table output."""
+def format_complex(z, digits: int = 6, *, sigfigs: int | None = None):
+    """Format a complex number for table output.
+
+    If sigfigs is set, use that many significant figures (g-format).
+    Otherwise digits is the number of decimal places (f-format).
+    """
     real = np.real(z)
     imag = np.imag(z)
 
+    if sigfigs is not None:
+
+        def fmt(v):
+            return f"{v:.{sigfigs}g}"
+
+    else:
+
+        def fmt(v):
+            return f"{v:.{digits}f}"
+
     if abs(imag) < 1e-12:
-        return f"{real:.{digits}f}"
+        return fmt(real)
     sign = "+" if imag >= 0 else "-"
-    return f"{real:.{digits}f}{sign}{abs(imag):.{digits}f}i"
+    return f"{fmt(real)}{sign}{fmt(abs(imag))}i"
 
 
 def print_plain_table(records):
@@ -155,18 +169,18 @@ def print_latex_equilibria_table(records):
     print("\nLaTeX table for all equilibria:\n")
     print(r"\begin{tabular}{rrrrlll}")
     print(r"\hline")
-    print(r"$x$ & $y$ & $f(x,y)$ & Type & Minimum class & Stability & Jacobian eigenvalues \\")
+    print(r"$x$ & $y$ & $f(x,y)$ & Type & Minimum class & Stability \\") # & Jacobian eigenvalues \\")
     print(r"\hline")
     for record in records:
-        eigvals = ", ".join(format_complex(z) for z in record["jacobian_eigs"])
+        eigvals = ", ".join(format_complex(z, sigfigs=3) for z in record["jacobian_eigs"])
         print(
-            f"{record['x']:.8f} & "
-            f"{record['y']:.8f} & "
-            f"{record['f']:.8f} & "
+            f"{record['x']:.3g} & "
+            f"{record['y']:.3g} & "
+            f"{record['f']:.3g} & "
             f"{record['hessian_type']} & "
             f"{record['minimum_scope']} & "
-            f"{record['stability']} & "
-            f"{eigvals} \\\\"
+            f"{record['stability']}\\\\"
+            # f"{eigvals} 
         )
     print(r"\hline")
     print(r"\end{tabular}")
@@ -182,11 +196,11 @@ def print_latex_minima_table(records, global_min_value):
     print(r"$x$ & $y$ & $f(x,y)$ & Minimum class & Stability & Hessian eigenvalues \\")
     print(r"\hline")
     for record in minima:
-        eigvals = ", ".join(format_complex(z) for z in record["hessian_eigs"])
+        eigvals = ", ".join(format_complex(z, sigfigs=3) for z in record["hessian_eigs"])
         print(
-            f"{record['x']:.8f} & "
-            f"{record['y']:.8f} & "
-            f"{record['f']:.8f} & "
+            f"{record['x']:.3g} & "
+            f"{record['y']:.3g} & "
+            f"{record['f']:.3g} & "
             f"{record['minimum_scope']} & "
             f"{record['stability']} & "
             f"{eigvals} \\\\"
@@ -195,7 +209,7 @@ def print_latex_minima_table(records, global_min_value):
     print(r"\end{tabular}")
 
     if global_min_value is not None:
-        print(f"\nGlobal minimum value: f_min = {global_min_value:.10f}")
+        print(f"\nGlobal minimum value: f_min = {global_min_value:.3g}")
 
 
 if __name__ == "__main__":
