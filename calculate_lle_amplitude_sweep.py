@@ -3,64 +3,127 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from heavy_ball_system import rhs
 
-def calculate_lle(amplitude, gamma=0.5, omega=1.0, t_max=400):
+
+def calculate_lle_benettin(
+    amplitude,
+    gamma=0.5,
+    omega=1.0,
+    t_warmup=500.0,
+    t_max=1000.0,
+    n_steps=500,
+    d0=1e-8,
+):
     """
-    Estimates the Largest Lyapunov Exponent by tracking two nearby trajectories.
+    Estimates the Largest Lyapunov Exponent using Benettin's rescaling algorithm.
+
+    Two key fixes over the naive estimator:
+      1. Continuous rescaling prevents saturation of the distance metric.
+      2. Measurement phase uses t in [t_warmup, t_warmup + t_max] so the
+         forcing term A*sin(omega*t) is never reset mid-run.
     """
-    d0 = 1e-8  # Tiny initial separation
-    s1 = np.array([0.1, 0.1, 0.0, 0.0])    # Reference trajectory
-    s2 = s1 + np.array([d0, 0, 0, 0])       # Perturbed trajectory
-
-    sol1 = solve_ivp(
+    # --- PHASE 1: WARM-UP ---
+    # Integrate a single trajectory to settle onto the attractor.
+    s_initial = np.array([1.0, 1.0, 0.0, 0.0])
+    sol_warm = solve_ivp(
         lambda t, y: rhs(t, y, gamma=gamma, amplitude=amplitude, omega=omega),
-        [0, t_max], s1, method='RK45', rtol=1e-10, atol=1e-12
+        [0.0, t_warmup],
+        s_initial,
+        method="RK45",
+        rtol=1e-10,
+        atol=1e-12,
+        dense_output=False,
     )
-    sol2 = solve_ivp(
-        lambda t, y: rhs(t, y, gamma=gamma, amplitude=amplitude, omega=omega),
-        [0, t_max], s2, method='RK45', rtol=1e-10, atol=1e-12
-    )
+    if not sol_warm.success:
+        return np.nan
 
-    if not sol1.success or not sol2.success:
-        return np.nan  # Guard against failed integrations
+    s1 = sol_warm.y[:, -1]
+    # Perturb only in x so the initial separation is exactly d0
+    s2 = s1 + np.array([d0, 0.0, 0.0, 0.0])
 
-    # LLE via final-time divergence: λ ≈ ln(d_final / d_initial) / t_max
-    dist_final = np.linalg.norm(sol1.y[:, -1] - sol2.y[:, -1])
+    # --- PHASE 2: BENETTIN RESCALING LOOP ---
+    # Time runs forward from t_warmup so A*sin(omega*t) is continuous.
+    t_start = t_warmup
+    t_end = t_warmup + t_max
+    step_times = np.linspace(t_start, t_end, n_steps + 1)
 
-    if dist_final == 0:
-        return -np.inf  # Trajectories never separated
+    log_sum = 0.0
 
-    lle = np.log(dist_final / d0) / t_max
-    return lle
+    for i in range(n_steps):
+        t0, t1 = step_times[i], step_times[i + 1]
 
-# --- Parameter Sweep ---
-amplitudes = np.linspace(0.0, 3.0, 50)
+        sol1 = solve_ivp(
+            lambda t, y: rhs(t, y, gamma=gamma, amplitude=amplitude, omega=omega),
+            [t0, t1],
+            s1,
+            method="RK45",
+            rtol=1e-10,
+            atol=1e-12,
+            dense_output=False,
+        )
+        sol2 = solve_ivp(
+            lambda t, y: rhs(t, y, gamma=gamma, amplitude=amplitude, omega=omega),
+            [t0, t1],
+            s2,
+            method="RK45",
+            rtol=1e-10,
+            atol=1e-12,
+            dense_output=False,
+        )
+
+        if not sol1.success or not sol2.success:
+            return np.nan
+
+        s1 = sol1.y[:, -1]
+        s2 = sol2.y[:, -1]
+
+        d_new = np.linalg.norm(s1 - s2)
+
+        if d_new == 0.0:
+            return -np.inf
+
+        # Accumulate the log-growth for this interval
+        log_sum += np.log(d_new / d0)
+
+        # Rescale s2 back to distance d0 from s1 along the same direction.
+        # This is what prevents saturation.
+        s2 = s1 + d0 * (s2 - s1) / d_new
+
+    return log_sum / t_max
+
+
+# --- Parameter sweep ---
+amplitudes = np.linspace(0.0001, 1, 30)
 lle_values = []
 
-print("Starting Parameter Sweep... (this may take a minute)")
+print(f"{'Amplitude':<12} | {'LLE':<10}")
+print("-" * 25)
+
 for a in amplitudes:
-    val = calculate_lle(a)
+    val = calculate_lle_benettin(a)
     lle_values.append(val)
-    print(f"A={a:.2f} | LLE={val:.4f}")
+    print(f"{a:<12.2f} | {val:<10.4f}")
 
 # --- Plotting ---
 lle_arr = np.array(lle_values)
 
 plt.figure(figsize=(10, 6))
-plt.plot(amplitudes, lle_arr, 'o-', markersize=4, color='black',
-         label="Largest Lyapunov Exponent")
-plt.axhline(0, color='red', linestyle='--', label=r"Chaotic Threshold ($\lambda=0$)")
+plt.plot(
+    amplitudes,
+    lle_arr,
+    "o-",
+    markersize=5,
+    color="black",
+    linewidth=1.5,
+    label="Benettin LLE",
+)
+plt.axhline(0, color="red", linestyle="--", alpha=0.8, label=r"Chaos threshold ($\lambda=0$)")
+plt.fill_between(amplitudes, 0, lle_arr, where=(lle_arr > 0), color="red",   alpha=0.1)
+plt.fill_between(amplitudes, 0, lle_arr, where=(lle_arr <= 0), color="green", alpha=0.05)
 
-threshold_idx = np.where(lle_arr > 0)[0]
-if len(threshold_idx) > 0:
-    a_crit = amplitudes[threshold_idx[0]]
-    #plt.axvline(a_crit, color='blue', alpha=0.3,
-             #   label=f"Threshold A ≈ {a_crit:.2f}")
-    plt.fill_between(amplitudes, 0, lle_arr,
-                     where=(lle_arr > 0), color='red', alpha=0.1)
-
-plt.title("Complexity Diagnostic: LLE vs. Forcing Amplitude")
-plt.xlabel("Forcing Amplitude (A)")
-plt.ylabel(r"Largest Lyapunov Exponent ($\lambda$)")
+plt.title("LLE vs. forcing amplitude", fontsize=14)
+plt.xlabel("Forcing amplitude (A)", fontsize=12)
+plt.ylabel(r"Largest Lyapunov exponent ($\lambda$)", fontsize=12)
 plt.legend()
 plt.grid(True, alpha=0.3)
+plt.tight_layout()
 plt.show()
