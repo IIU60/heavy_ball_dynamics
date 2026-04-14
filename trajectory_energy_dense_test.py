@@ -52,7 +52,7 @@ LEGEND_KWARGS_E = {
 PARAMETER_CASES = (
     # (amplitude, gamma, omega, short label)
     (0.05, 0.5, 1.0, "convergence"),
-    (3.9, 0.1, 1.0, "periodic locking"),
+    (0.3, 0.1, 1.0, "periodic locking"), # these are the circular trajectory params
     (3.5, 0.1, 1.0, "chaotic behavior"),
 )
 
