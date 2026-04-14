@@ -32,28 +32,28 @@ TRAJECTORY_LABELS = ("reference", "perturbation 1", "perturbation 2")
 # Legible legend text and larger color swatches (scatter + line handles).
 LEGEND_KWARGS_XY = {
     "loc": "best",
-    "fontsize": 11,
-    "markerscale": 2.8,
+    "fontsize": 12,
+    "markerscale": 3.1,
     "framealpha": 0.95,
-    "borderpad": 0.6,
-    "labelspacing": 0.6,
+    "borderpad": 0.65,
+    "labelspacing": 0.65,
 }
 LEGEND_KWARGS_E = {
     "loc": "best",
-    "fontsize": 11,
-    "handlelength": 3.2,
-    "handletextpad": 0.9,
+    "fontsize": 12,
+    "handlelength": 3.6,
+    "handletextpad": 0.95,
     "framealpha": 0.95,
-    "borderpad": 0.6,
-    "labelspacing": 0.6,
+    "borderpad": 0.65,
+    "labelspacing": 0.65,
 }
 
 # Same three cases as trajectory_visualization.py __main__ (order preserved).
 PARAMETER_CASES = (
     # (amplitude, gamma, omega, short label)
-    (0.1, 0.5, 1.0, "convergence"),
-    (0.3, 0.1, 1.0, "periodic locking"),
-    (0.5, 0.5, 1.0, "chaotic behavior"),
+    (0.05, 0.5, 1.0, "convergence"),
+    (3.9, 0.1, 1.0, "periodic locking"),
+    (3.5, 0.1, 1.0, "chaotic behavior"),
 )
 
 # Much shorter than N_CYCLES_DEFAULT=600 (~5 forcing periods)
@@ -120,7 +120,7 @@ def plot_one_case(amplitude: float, gamma: float, omega: float, case_label: str)
             t,
             energy,
             color=color,
-            linewidth=1.4,
+            linewidth=1.55,
             label=label,
         )
 
