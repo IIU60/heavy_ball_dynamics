@@ -9,25 +9,25 @@ def get_poincare_data(amplitude, gamma, omega, n_cycles=600):
     """
     T = 2 * np.pi / omega
     t_span = (0, n_cycles * T)
-    t_eval = np.arange(0, n_cycles * T, T) # Strobe matches the specific omega
+    t_eval = np.arange(0, n_cycles * T, T)
     
     initial_state = [1.0, 1.0, 0.0, 0.0] #[x0, y0, v_x0, v_y0]
     
     sol = solve_ivp(
-    lambda t, y: rhs(t, y, gamma=gamma, amplitude=amplitude, omega=omega),
-    t_span, 
-    initial_state, 
-    t_eval=t_eval, 
-    method='RK45', 
-    rtol=1e-10,  # Tightened from 1e-8
-    atol=1e-12   # Added absolute tolerance
-)
+        lambda t, y: rhs(t, y, gamma=gamma, amplitude=amplitude, omega=omega),
+        t_span, 
+        initial_state, 
+        t_eval=t_eval, 
+        method='RK45', 
+        rtol=1e-10,
+        atol=1e-12
+    )
     
     warm_up = int(0.3 * len(sol.y[0]))
-    return sol.y#[:, warm_up:]
+    return sol.y, warm_up  # Return both the full data and the warm_up index
 
 def plot_dynamics(amplitude, gamma, omega):
-    data = get_poincare_data(amplitude, gamma, omega)
+    data, warm_up = get_poincare_data(amplitude, gamma, omega)
     x, vx = data[0], data[2]
     
     # Calculate Energy
@@ -38,17 +38,16 @@ def plot_dynamics(amplitude, gamma, omega):
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     fig.suptitle(f"Analysis: $A={amplitude}, \gamma={gamma}, \Omega={omega}$", fontsize=14)
     
-    # 1. Plot all points in blue
-    axes[0].scatter(x, vx, s=15, color='blue', alpha=0.6, label='Trajectory')
+    # 1. Plot warm-up points in blue
+    axes[0].scatter(x[:warm_up], vx[:warm_up], s=15, color='blue', alpha=0.6, label='Warm-up')
     
-    # 2. Highlight the LAST point in red and larger
-    # x[-1] and vx[-1] access the final value in the arrays
-    axes[0].scatter(x[-1], vx[-1], s=50, color='red', edgecolors='black', zorder=5, label='End State')
+    # 2. Plot post warm-up points in red
+    axes[0].scatter(x[warm_up:], vx[warm_up:], s=50, color='red', edgecolors='black', alpha=0.6, label='Post Warm-up')
     
     axes[0].set_title("Poincaré Section $(x, v_x)$")
     axes[0].set_xlabel("Position $x$")
     axes[0].set_ylabel("Velocity $v_x$")
-    axes[0].legend() # Added a legend to help identify the red dot
+    axes[0].legend()
     
     axes[1].plot(energy, color='red', linewidth=0.8)
     axes[1].set_title("Energy at sampled periods")
@@ -57,7 +56,6 @@ def plot_dynamics(amplitude, gamma, omega):
     
     plt.tight_layout()
     plt.show()
-
 
 
 # convergence
